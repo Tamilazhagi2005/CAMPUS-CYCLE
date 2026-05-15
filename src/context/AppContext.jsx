@@ -11,11 +11,34 @@ const AppContext = createContext();
 
 export const useAppContext = () => useContext(AppContext);
 
+const normalizeUser = (user) => {
+  if (!user) return null;
+  return {
+    ItemsReused: 0,
+    PointsEarned: 0,
+    ItemsSold: 0,
+    SellerRating: 5.0,
+    Name: "",
+    Email: "",
+    Department: "",
+    GraduatingYear: "",
+    ...user
+  };
+};
+
 export const AppProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(() => {
+  const [currentUser, _setCurrentUser] = useState(() => {
     const saved = localStorage.getItem("campuscycle_user");
-    return saved ? JSON.parse(saved) : null;
+    const parsed = saved ? JSON.parse(saved) : null;
+    return normalizeUser(parsed);
   });
+
+  const setCurrentUser = (value) => {
+    _setCurrentUser((prev) => {
+      const next = typeof value === "function" ? value(prev) : value;
+      return normalizeUser(next);
+    });
+  };
 
   const [items, setItems] = useState(() => {
     const saved = localStorage.getItem("campuscycle_items");
