@@ -40,10 +40,7 @@ export const AppProvider = ({ children }) => {
     });
   };
 
-  const [items, setItems] = useState(() => {
-    const saved = localStorage.getItem("campuscycle_items");
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [items, setItems] = useState([]);
 
   const [chats, setChats] = useState([]);
   const [loadingChats, setLoadingChats] = useState(true);
@@ -60,11 +57,28 @@ export const AppProvider = ({ children }) => {
   }, [currentUser]);
 
   useEffect(() => {
-    localStorage.setItem(
-      "campuscycle_items",
-      JSON.stringify(items)
+    const q = query(
+      collection(db, "Items"),
+      orderBy("DatePosted", "desc")
     );
-  }, [items]);
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const itemData = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+
+        setItems(itemData);
+      },
+      (error) => {
+        console.error("Item listener error:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   useEffect(() => {
     const q = query(

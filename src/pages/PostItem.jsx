@@ -162,12 +162,6 @@ const PostItem = () => {
 
       await addDoc(collection(db, "Items"), newItem);
 
-      setItems(prev => {
-        const updated = [newItem, ...prev];
-        localStorage.setItem('campuscycle_items', JSON.stringify(updated));
-        return updated;
-      });
-
       alert("Item posted successfully!");
       navigate('/home');
 
