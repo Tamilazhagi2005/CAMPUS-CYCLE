@@ -41,9 +41,9 @@ const Profile = () => {
             {currentUser.Department} • {currentUser.Email}
           </p>
           <div style={{ display: 'flex', justifyContent: 'center', gap: '8px', marginTop: '10px', flexWrap: 'wrap' }}>
-            <span style={styles.badge}>Seller Rating: ★ {currentUser.SellerRating || '5.0'}</span>
+            <span style={styles.badge}>Seller Rating: ★ {currentUser?.SellerRating || '5.0'}</span>
             <span style={styles.badge}>Verified Student</span>
-            {currentUser.GraduatingSoonStatus && (
+            {currentUser?.GraduatingSoonStatus && (
               <span style={{ 
                 ...styles.badge, 
                 backgroundColor: 'rgba(255, 193, 7, 0.2)', 
