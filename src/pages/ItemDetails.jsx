@@ -1,13 +1,33 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { BadgeCheck, MapPin, MessageSquare } from 'lucide-react';
+import {
+  BadgeCheck,
+  MapPin,
+  MessageSquare
+} from 'lucide-react';
+
 import ItemCard from '../components/ItemCard';
+
+import {
+  collection,
+  query,
+  where,
+  getDocs,
+  addDoc,
+  serverTimestamp
+} from 'firebase/firestore';
+
+import { db } from '../firebase';
 
 const ItemDetails = () => {
   const { itemId } = useParams();
   const navigate = useNavigate();
-  const { items, currentUser, setChats } = useAppContext();
+
+  const {
+    items,
+    currentUser
+  } = useAppContext();
 
   const item = items.find(i => i.ItemID === itemId);
 
@@ -16,12 +36,16 @@ const ItemDetails = () => {
   }
 
   const recommendedItems = items
-    .filter(i => i.Category === item.Category && i.ItemID !== item.ItemID)
+    .filter(
+      i =>
+        i.Category === item.Category &&
+        i.ItemID !== item.ItemID
+    )
     .slice(0, 2);
 
-  const handleChat = () => {
+  const handleChat = async () => {
     if (!currentUser) {
-      alert("Please login to chat with seller.");
+      alert("Please login first.");
       navigate('/login');
       return;
     }
@@ -31,55 +55,64 @@ const ItemDetails = () => {
       return;
     }
 
-    setChats(prev => {
-      const existing = prev.find(
-        c => c.ItemID === item.ItemID && c.BuyerEmail === currentUser.Email
+    try {
+      const q = query(
+        collection(db, "Chats"),
+        where("ItemID", "==", item.ItemID),
+        where("BuyerEmail", "==", currentUser.Email)
       );
 
-      if (existing) {
-        navigate(`/chat/${existing.ChatID}`);
-        return prev;
+      const existingChats = await getDocs(q);
+
+      if (!existingChats.empty) {
+        const existingChat = existingChats.docs[0];
+        navigate(`/chat/${existingChat.id}`);
+        return;
       }
 
-      const newChatID = Date.now().toString();
+      const chatRef = await addDoc(
+        collection(db, "Chats"),
+        {
+          ItemID: item.ItemID,
+          ItemName: item.ItemName,
 
-      const newChat = {
-        ChatID: newChatID,
-        ItemID: item.ItemID,
-        ItemName: item.ItemName,
+          SellerEmail: item.SellerEmail,
+          SellerName: item.SellerName,
+          SellerDepartment: item.SellerDepartment || "",
 
-        SellerEmail: item.SellerEmail,
-        SellerName: item.SellerName,
-        SellerDepartment: item.SellerDepartment,
-        SellerRating: item.SellerRating,
+          BuyerEmail: currentUser.Email,
+          BuyerName: currentUser.Name,
+          BuyerDepartment: currentUser.Department || "",
+          BuyerYear: currentUser.GraduatingYear || "",
 
-        BuyerEmail: currentUser.Email,
-        BuyerName: currentUser.Name,
-        BuyerDepartment: currentUser.Department,
-        BuyerYear: currentUser.GraduatingYear,
-        BuyerProfileImage: currentUser.ProfileImage || "",
+          LastMessage: "Hi, is this still available?",
+          UpdatedAt: serverTimestamp()
+        }
+      );
 
-        Messages: [
-          {
-            MsgID: Date.now().toString(),
-            Sender: currentUser.Email,
-            SenderName: currentUser.Name,
-            Text: "Hi, is this still available?",
-            Timestamp: new Date().toLocaleTimeString([], {
-              hour: '2-digit',
-              minute: '2-digit'
-            })
-          }
-        ]
-      };
+      await addDoc(
+        collection(db, "Chats", chatRef.id, "Messages"),
+        {
+          Sender: currentUser.Email,
+          SenderName: currentUser.Name,
+          Text: "Hi, is this still available?",
+          Timestamp: serverTimestamp()
+        }
+      );
 
-      setTimeout(() => navigate(`/chat/${newChatID}`), 100);
-      return [...prev, newChat];
-    });
+      navigate(`/chat/${chatRef.id}`);
+
+    } catch (error) {
+      console.error(error);
+      alert("Failed to create chat.");
+    }
   };
 
   return (
-    <div className="page-container" style={{ paddingBottom: '90px' }}>
+    <div
+      className="page-container"
+      style={{ paddingBottom: '90px' }}
+    >
       <button
         onClick={() => navigate(-1)}
         className="btn-secondary"
@@ -100,52 +133,102 @@ const ItemDetails = () => {
         />
       </div>
 
-      <div className="glass-card" style={styles.detailsCard}>
-        <div className="flex-row-between" style={{ marginBottom: '10px' }}>
-          <span style={styles.category}>{item.Category}</span>
-          <span style={styles.condition}>{item.Condition}</span>
+      <div
+        className="glass-card"
+        style={styles.detailsCard}
+      >
+        <div
+          className="flex-row-between"
+          style={{ marginBottom: '10px' }}
+        >
+          <span style={styles.category}>
+            {item.Category}
+          </span>
+
+          <span style={styles.condition}>
+            {item.Condition}
+          </span>
         </div>
 
-        <h1 style={styles.title}>{item.ItemName}</h1>
+        <h1 style={styles.title}>
+          {item.ItemName}
+        </h1>
 
         <div style={styles.priceRow}>
           <span style={styles.price}>
-            {item.Price === 0 || item.FreecycleTag ? 'FREE' : `₹${item.Price}`}
+            {item.Price === 0 || item.FreecycleTag
+              ? 'FREE'
+              : `₹${item.Price}`}
           </span>
+
           {item.FreecycleTag && (
-            <span style={styles.freeBadge}>Freecycle</span>
+            <span style={styles.freeBadge}>
+              Freecycle
+            </span>
           )}
         </div>
 
-        <p style={styles.description}>{item.Description}</p>
+        <p style={styles.description}>
+          {item.Description}
+        </p>
 
         <div style={styles.locationRow}>
-          <MapPin size={18} color="var(--primary-color)" />
+          <MapPin
+            size={18}
+            color="var(--primary-color)"
+          />
+
           <span>
             Meeting Point: {item.PickupLocation}
-            {item.DepartmentPickup ? ` (${item.DepartmentPickup})` : ''}
+            {item.DepartmentPickup
+              ? ` (${item.DepartmentPickup})`
+              : ''}
           </span>
         </div>
       </div>
 
-      <div className="glass-card" style={styles.sellerCard}>
+      <div
+        className="glass-card"
+        style={styles.sellerCard}
+      >
         <h3>Seller Details</h3>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '15px'
+          }}
+        >
           <div style={styles.avatar}>
-            {item.SellerName.charAt(0)}
+            {item.SellerName?.charAt(0)}
           </div>
 
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+            >
               <span>{item.SellerName}</span>
+
               {item.VerifiedBadge && (
-                <BadgeCheck size={16} color="var(--primary-color)" />
+                <BadgeCheck
+                  size={16}
+                  color="var(--primary-color)"
+                />
               )}
             </div>
 
-            <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {item.SellerDepartment} Dept • ★ {item.SellerRating}
+            <div
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--text-muted)'
+              }}
+            >
+              {item.SellerDepartment} • ★ {item.SellerRating}
             </div>
           </div>
         </div>
@@ -172,12 +255,16 @@ const ItemDetails = () => {
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(2, 1fr)',
+              gridTemplateColumns:
+                'repeat(2, 1fr)',
               gap: '15px'
             }}
           >
             {recommendedItems.map(i => (
-              <ItemCard key={i.ItemID} item={i} />
+              <ItemCard
+                key={i.ItemID}
+                item={i}
+              />
             ))}
           </div>
         </div>
@@ -194,54 +281,66 @@ const styles = {
     overflow: 'hidden',
     marginBottom: '15px'
   },
+
   image: {
     width: '100%',
     height: '100%',
     objectFit: 'cover'
   },
+
   detailsCard: {
     padding: '20px',
     marginBottom: '15px'
   },
+
   category: {
     fontSize: '0.8rem',
     color: 'green',
     fontWeight: '700'
   },
+
   condition: {
     background: '#eee',
     padding: '4px 8px',
     borderRadius: '8px'
   },
+
   title: {
     fontSize: '1.4rem'
   },
+
   priceRow: {
     display: 'flex',
     gap: '10px',
     alignItems: 'center'
   },
+
   price: {
     fontSize: '1.6rem',
     fontWeight: '800'
   },
+
   freeBadge: {
     background: 'green',
     color: 'white',
     padding: '4px 8px',
     borderRadius: '8px'
   },
+
   description: {
     marginTop: '10px'
   },
+
   locationRow: {
     display: 'flex',
     gap: '8px',
     marginTop: '15px'
   },
+
   sellerCard: {
     padding: '20px'
   },
+
   avatar: {
     width: '50px',
     height: '50px',
