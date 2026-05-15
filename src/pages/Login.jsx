@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Leaf } from 'lucide-react';
-import { auth, db } from '../firebase';
+import { auth, db, isFirebaseConfigured } from '../firebase';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -19,31 +19,52 @@ const Login = () => {
     setError('');
 
     try {
-      // 1. Authenticate with Firebase
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      const user = userCredential.user;
+      let userData = null;
 
-      // 2. Fetch User Profile from Firestore
-      const userDocRef = doc(db, "Users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
+      if (isFirebaseConfigured) {
+        // 1. Authenticate with Firebase
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        const user = userCredential.user;
 
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
+        // 2. Fetch User Profile from Firestore
+        const userDocRef = doc(db, 'Users', user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          userData = userDocSnap.data();
+        } else {
+          userData = {
+            UserID: user.uid,
+            Email: user.email,
+            Name: user.email,
+            VerifiedBadge: true,
+            SellerRating: 5.0,
+          };
+        }
+      } else {
+        // Fallback to local mock data
+        userData = users.find((u) => u.Email === email && u.Password === password);
+      }
+
+      if (userData) {
         // 3. Set Current User Context
         setCurrentUser(userData);
+        localStorage.setItem('campuscycle_currentUser', JSON.stringify(userData));
         navigate('/home');
-      } else {
-        // Document didn't exist but auth succeeded is an edge case
-        console.error("No such user document!");
-        setError("User profile data not found.");
+      } else if (!isFirebaseConfigured) {
+        setError('Invalid email or password. Are you registered?');
       }
 
     } catch (err) {
-      console.error("Login error:", err);
-      if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-login-credentials') {
-         setError('Invalid email or password. Are you registered?');
+      console.error('Login error:', err);
+      if (
+        err.code === 'auth/user-not-found' ||
+        err.code === 'auth/wrong-password' ||
+        err.code === 'auth/invalid-login-credentials'
+      ) {
+        setError('Invalid email or password. Are you registered?');
       } else {
-         setError('Login failed. Please try again later.');
+        setError(err.message || 'Login failed. Please try again later.');
       }
     }
   };

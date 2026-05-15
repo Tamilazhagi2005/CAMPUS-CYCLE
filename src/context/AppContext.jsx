@@ -1,19 +1,24 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
-import { auth, db } from '../firebase';
+import { auth, db, isFirebaseConfigured } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, onSnapshot, orderBy, query, doc, getDoc } from 'firebase/firestore';
 
 const AppContext = createContext();
 
 export const AppProvider = ({ children }) => {
+  // Load initial data from localStorage if available
+  const localUsers = JSON.parse(localStorage.getItem('campuscycle_users') || '[]');
+  const localUser = JSON.parse(localStorage.getItem('campuscycle_currentUser') || 'null');
+  const localItems = JSON.parse(localStorage.getItem('campuscycle_items') || 'null');
+
   // Users Database Mock
-  const [users, setUsers] = useState([]);
+  const [users, setUsers] = useState(localUsers);
   
   // Current logged in user
-  const [currentUser, setCurrentUser] = useState(null);
+  const [currentUser, setCurrentUser] = useState(localUser);
 
   // Items Database Mock
-  const [items, setItems] = useState([
+  const [items, setItems] = useState(localItems || [
     {
       ItemID: '1',
       ItemName: 'Scientific Calculator fx-991EX',
@@ -66,8 +71,10 @@ export const AppProvider = ({ children }) => {
     WastePrevented: 42 // in kg
   });
 
-  // Firebase Real-time Sync
+  // Firebase Real-time Sync (Only if configured)
   useEffect(() => {
+    if (!isFirebaseConfigured) return;
+
     // 1. Listen to Auth State
     const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {

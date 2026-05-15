@@ -1,7 +1,7 @@
 import React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { BadgeCheck, MapPin, MessageSquare, AlertCircle } from 'lucide-react';
+import { BadgeCheck, MapPin, MessageSquare } from 'lucide-react';
 import ItemCard from '../components/ItemCard';
 
 const ItemDetails = () => {
@@ -15,39 +15,64 @@ const ItemDetails = () => {
     return <div className="page-container">Item not found.</div>;
   }
 
-  const recommendedItems = items.filter(i => i.Category === item.Category && i.ItemID !== item.ItemID).slice(0, 2);
+  const recommendedItems = items
+    .filter(i => i.Category === item.Category && i.ItemID !== item.ItemID)
+    .slice(0, 2);
 
   const handleChat = () => {
     if (!currentUser) {
-      alert("Please login to chat with the seller.");
+      alert("Please login to chat with seller.");
       navigate('/login');
       return;
     }
 
     if (currentUser.Email === item.SellerEmail) {
-      alert("You cannot chat with yourself on your own listing!");
+      alert("You cannot chat with yourself.");
       return;
     }
 
-    // Check if chat exists
     setChats(prev => {
-      const existing = prev.find(c => c.ItemID === item.ItemID && c.BuyerEmail === currentUser.Email);
+      const existing = prev.find(
+        c => c.ItemID === item.ItemID && c.BuyerEmail === currentUser.Email
+      );
+
       if (existing) {
         navigate(`/chat/${existing.ChatID}`);
         return prev;
       }
-      
+
       const newChatID = Date.now().toString();
+
       const newChat = {
         ChatID: newChatID,
         ItemID: item.ItemID,
         ItemName: item.ItemName,
+
         SellerEmail: item.SellerEmail,
         SellerName: item.SellerName,
+        SellerDepartment: item.SellerDepartment,
+        SellerRating: item.SellerRating,
+
         BuyerEmail: currentUser.Email,
-        Messages: []
+        BuyerName: currentUser.Name,
+        BuyerDepartment: currentUser.Department,
+        BuyerYear: currentUser.GraduatingYear,
+        BuyerProfileImage: currentUser.ProfileImage || "",
+
+        Messages: [
+          {
+            MsgID: Date.now().toString(),
+            Sender: currentUser.Email,
+            SenderName: currentUser.Name,
+            Text: "Hi, is this still available?",
+            Timestamp: new Date().toLocaleTimeString([], {
+              hour: '2-digit',
+              minute: '2-digit'
+            })
+          }
+        ]
       };
-      
+
       setTimeout(() => navigate(`/chat/${newChatID}`), 100);
       return [...prev, newChat];
     });
@@ -55,13 +80,24 @@ const ItemDetails = () => {
 
   return (
     <div className="page-container" style={{ paddingBottom: '90px' }}>
-      <button onClick={() => navigate(-1)} className="btn-secondary" style={{ width: 'auto', padding: '8px 16px', marginBottom: '15px' }}>
-        &larr; Back
+      <button
+        onClick={() => navigate(-1)}
+        className="btn-secondary"
+        style={{
+          width: 'auto',
+          padding: '8px 16px',
+          marginBottom: '15px'
+        }}
+      >
+        ← Back
       </button>
 
-      {/* Image */}
       <div style={styles.imageContainer}>
-        <img src={item.Image || 'https://via.placeholder.com/400'} alt={item.ItemName} style={styles.image} />
+        <img
+          src={item.Image || 'https://via.placeholder.com/400'}
+          alt={item.ItemName}
+          style={styles.image}
+        />
       </div>
 
       <div className="glass-card" style={styles.detailsCard}>
@@ -71,52 +107,75 @@ const ItemDetails = () => {
         </div>
 
         <h1 style={styles.title}>{item.ItemName}</h1>
-        
+
         <div style={styles.priceRow}>
           <span style={styles.price}>
             {item.Price === 0 || item.FreecycleTag ? 'FREE' : `₹${item.Price}`}
           </span>
-          {item.FreecycleTag && <span style={styles.freeBadge}>Freecycle</span>}
+          {item.FreecycleTag && (
+            <span style={styles.freeBadge}>Freecycle</span>
+          )}
         </div>
 
         <p style={styles.description}>{item.Description}</p>
 
         <div style={styles.locationRow}>
           <MapPin size={18} color="var(--primary-color)" />
-          <span style={{ fontSize: '0.9rem', color: 'var(--text-main)', fontWeight: '500' }}>
-            Meeting Point: {item.PickupLocation} {item.DepartmentPickup ? `(${item.DepartmentPickup})` : ''}
+          <span>
+            Meeting Point: {item.PickupLocation}
+            {item.DepartmentPickup ? ` (${item.DepartmentPickup})` : ''}
           </span>
         </div>
       </div>
 
-      {/* Seller Profile */}
       <div className="glass-card" style={styles.sellerCard}>
-        <h3 style={{ fontSize: '1rem', marginBottom: '12px' }}>Seller Details</h3>
+        <h3>Seller Details</h3>
+
         <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-          <div style={styles.avatar}>{item.SellerName.charAt(0)}</div>
+          <div style={styles.avatar}>
+            {item.SellerName.charAt(0)}
+          </div>
+
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontWeight: '600', fontSize: '1rem' }}>{item.SellerName}</span>
-              {item.VerifiedBadge && <BadgeCheck size={16} color="var(--primary-color)" />}
+              <span>{item.SellerName}</span>
+              {item.VerifiedBadge && (
+                <BadgeCheck size={16} color="var(--primary-color)" />
+              )}
             </div>
+
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
-              {item.SellerDepartment} Dept • ★ {item.SellerRating} Rating
+              {item.SellerDepartment} Dept • ★ {item.SellerRating}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-          <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} onClick={handleChat}>
-            <MessageSquare size={18} /> Chat with Seller
-          </button>
-        </div>
+        <button
+          className="btn-primary"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginTop: '20px'
+          }}
+          onClick={handleChat}
+        >
+          <MessageSquare size={18} />
+          Chat with Seller
+        </button>
       </div>
 
-      {/* Recommendations */}
       {recommendedItems.length > 0 && (
         <div style={{ marginTop: '30px' }}>
-          <h3 style={{ fontSize: '1.1rem', marginBottom: '15px' }}>Similar Items</h3>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '15px' }}>
+          <h3>Similar Items</h3>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '15px'
+            }}
+          >
             {recommendedItems.map(i => (
               <ItemCard key={i.ItemID} item={i} />
             ))}
@@ -131,10 +190,9 @@ const styles = {
   imageContainer: {
     width: '100%',
     height: '250px',
-    borderRadius: 'var(--radius-lg)',
+    borderRadius: '16px',
     overflow: 'hidden',
-    marginBottom: '15px',
-    boxShadow: 'var(--shadow-sm)'
+    marginBottom: '15px'
   },
   image: {
     width: '100%',
@@ -147,70 +205,52 @@ const styles = {
   },
   category: {
     fontSize: '0.8rem',
-    color: 'var(--primary-color)',
-    fontWeight: '700',
-    textTransform: 'uppercase',
+    color: 'green',
+    fontWeight: '700'
   },
   condition: {
-    fontSize: '0.8rem',
-    color: 'var(--text-main)',
-    backgroundColor: '#eee',
-    padding: '2px 8px',
-    borderRadius: 'var(--radius-sm)',
-    fontWeight: '500'
+    background: '#eee',
+    padding: '4px 8px',
+    borderRadius: '8px'
   },
   title: {
-    fontSize: '1.4rem',
-    lineHeight: '1.3',
-    marginBottom: '8px',
+    fontSize: '1.4rem'
   },
   priceRow: {
     display: 'flex',
-    alignItems: 'center',
     gap: '10px',
-    marginBottom: '15px',
+    alignItems: 'center'
   },
   price: {
     fontSize: '1.6rem',
-    fontWeight: '800',
-    color: 'var(--primary-dark)',
+    fontWeight: '800'
   },
   freeBadge: {
-    backgroundColor: 'var(--success)',
+    background: 'green',
     color: 'white',
     padding: '4px 8px',
-    borderRadius: 'var(--radius-sm)',
-    fontSize: '0.8rem',
-    fontWeight: 'bold',
+    borderRadius: '8px'
   },
   description: {
-    fontSize: '0.95rem',
-    color: 'var(--text-muted)',
-    lineHeight: '1.6',
-    marginBottom: '15px',
+    marginTop: '10px'
   },
   locationRow: {
     display: 'flex',
-    alignItems: 'center',
     gap: '8px',
-    padding: '12px',
-    backgroundColor: 'rgba(47, 138, 74, 0.05)',
-    borderRadius: 'var(--radius-md)',
+    marginTop: '15px'
   },
   sellerCard: {
-    padding: '20px',
+    padding: '20px'
   },
   avatar: {
     width: '50px',
     height: '50px',
     borderRadius: '50%',
-    backgroundColor: 'var(--primary-light)',
+    background: 'green',
     color: 'white',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.5rem',
-    fontWeight: 'bold',
+    justifyContent: 'center'
   }
 };
 

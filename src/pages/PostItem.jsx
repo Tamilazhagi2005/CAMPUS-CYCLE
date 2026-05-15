@@ -2,9 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
 import { Sparkles, Image as ImageIcon } from 'lucide-react';
-import { db, storage } from '../firebase';
+import { db } from '../firebase';
 import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const CATEGORIES = ['Books', 'Electronics', 'Hostel Items', 'Lab Equipment', 'Others'];
 const CONDITIONS = ['New', 'Good', 'Used'];
@@ -43,31 +42,39 @@ const PostItem = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [suggestedPrice, setSuggestedPrice] = useState(null);
 
-  // Auto-suggest Graduating Sale
   useEffect(() => {
     if (currentUser && currentUser.GraduatingSoonStatus) {
       setFormData(prev => ({ ...prev, LeavingCampusSoonTag: true }));
     }
   }, [currentUser]);
 
-  // AI Smart Price Suggestion Logic (Mock)
   useEffect(() => {
     if (formData.Category && formData.Condition && !formData.FreecycleTag) {
       let base = 0;
+
       switch (formData.Category) {
-        case 'Electronics': base = 1500; break;
-        case 'Lab Equipment': base = 300; break;
-        case 'Books': base = 250; break;
-        case 'Hostel Items': base = 500; break;
-        case 'Others': base = 200; break;
-        default: base = 100;
+        case 'Electronics':
+          base = 1500;
+          break;
+        case 'Lab Equipment':
+          base = 300;
+          break;
+        case 'Books':
+          base = 250;
+          break;
+        case 'Hostel Items':
+          base = 500;
+          break;
+        default:
+          base = 200;
       }
-      
+
       let multiplier = 1;
+
       if (formData.Condition === 'New') multiplier = 0.9;
       if (formData.Condition === 'Good') multiplier = 0.6;
       if (formData.Condition === 'Used') multiplier = 0.4;
-      
+
       const suggested = Math.floor(base * multiplier);
       setSuggestedPrice(`₹${suggested - 50} - ₹${suggested + 50}`);
     } else {
@@ -78,23 +85,25 @@ const PostItem = () => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
     const val = type === 'checkbox' ? checked : value;
-    
+
     setFormData(prev => {
       let data = { ...prev, [name]: val };
-      
-      // Dynamic logic
-      if (name === 'FreecycleTag' && val === true) {
+
+      if (name === 'FreecycleTag' && checked) {
         data.Price = 0;
       }
+
       if (name === 'PickupLocation' && value !== 'Department Blocks') {
         data.DepartmentPickup = '';
       }
+
       return data;
     });
   };
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
+
     if (file) {
       setImageFile(file);
       setImagePreview(URL.createObjectURL(file));
@@ -103,32 +112,48 @@ const PostItem = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!currentUser) {
-      alert("Please login first to post an item.");
-      navigate('/login');
+      alert("Please login first.");
+      navigate("/login");
       return;
     }
 
     setIsSubmitting(true);
 
     try {
-      let imageUrl = 'https://via.placeholder.com/300'; // Default
-      
-      // 1. Upload Image to Firebase Storage if a file was selected
+      let imageUrl = "https://via.placeholder.com/300";
+
       if (imageFile) {
-        const imageRef = ref(storage, `items/${Date.now()}_${imageFile.name}`);
-        const snapshot = await uploadBytes(imageRef, imageFile);
-        imageUrl = await getDownloadURL(snapshot.ref);
+        const cloudData = new FormData();
+        cloudData.append("file", imageFile);
+        cloudData.append("upload_preset", "campuscycle_upload");
+
+        const response = await fetch(
+          "https://api.cloudinary.com/v1_1/dno433imc/image/upload",
+          {
+            method: "POST",
+            body: cloudData,
+          }
+        );
+
+        const data = await response.json();
+
+        if (!data.secure_url) {
+          throw new Error("Image upload failed");
+        }
+
+        imageUrl = data.secure_url;
       }
 
-      // 2. Save Item Data to Firestore
       const newItem = {
         ...formData,
+        ItemID: Date.now().toString(),
         SellerEmail: currentUser.Email,
         SellerName: currentUser.Name,
         SellerDepartment: currentUser.Department,
         SellerRating: currentUser.SellerRating || 5.0,
-        VerifiedBadge: currentUser.VerifiedBadge || true,
+        VerifiedBadge: true,
         Price: Number(formData.Price) || 0,
         DatePosted: new Date().toISOString(),
         Status: 'Active',
@@ -137,14 +162,18 @@ const PostItem = () => {
 
       await addDoc(collection(db, "Items"), newItem);
 
-      // We don't need to update local state necessarily if AppContext has an onSnapshot listener, 
-      // but if not, we would normally do it here. We'll set up the listener next.
-      
+      setItems(prev => {
+        const updated = [newItem, ...prev];
+        localStorage.setItem('campuscycle_items', JSON.stringify(updated));
+        return updated;
+      });
+
       alert("Item posted successfully!");
       navigate('/home');
+
     } catch (error) {
-      console.error("Error posting item:", error);
-      alert("Failed to post item. Please try again.");
+      console.error(error);
+      alert(error.message);
     } finally {
       setIsSubmitting(false);
     }
@@ -159,121 +188,151 @@ const PostItem = () => {
           
           <div>
             <label style={styles.label}>Item Name</label>
-            <input type="text" name="ItemName" className="input-field" value={formData.ItemName} onChange={handleChange} required />
+            <input
+              type="text"
+              name="ItemName"
+              className="input-field"
+              value={formData.ItemName}
+              onChange={handleChange}
+              required
+            />
           </div>
 
           <div>
             <label style={styles.label}>Category</label>
-            <select name="Category" className="input-field" value={formData.Category} onChange={handleChange} required>
+            <select
+              name="Category"
+              className="input-field"
+              value={formData.Category}
+              onChange={handleChange}
+              required
+            >
               <option value="">Select Category</option>
-              {CATEGORIES.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+              {CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
             </select>
           </div>
 
           <div>
             <label style={styles.label}>Condition</label>
-            <select name="Condition" className="input-field" value={formData.Condition} onChange={handleChange} required>
+            <select
+              name="Condition"
+              className="input-field"
+              value={formData.Condition}
+              onChange={handleChange}
+              required
+            >
               <option value="">Select Condition</option>
-              {CONDITIONS.map(cond => <option key={cond} value={cond}>{cond}</option>)}
+              {CONDITIONS.map(cond => (
+                <option key={cond} value={cond}>{cond}</option>
+              ))}
             </select>
           </div>
 
-          {/* AI Smart Price Suggestion */}
           {suggestedPrice && !formData.FreecycleTag && (
             <div style={styles.aiBox}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' }}>
-                <Sparkles size={16} color="var(--primary-color)" />
-                <strong style={{ fontSize: '0.85rem', color: 'var(--primary-dark)' }}>AI Suggested Price</strong>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Sparkles size={16} />
+                <strong>AI Suggested Price</strong>
               </div>
-              <p style={{ fontSize: '0.85rem', color: 'var(--text-main)', margin: 0 }}>
-                Based on similar items: <strong>{suggestedPrice}</strong>
-              </p>
+              <p>Based on similar items: {suggestedPrice}</p>
             </div>
           )}
 
           <div>
-            <label style={styles.label}>Price (₹) {formData.FreecycleTag && '(Disabled - Freecycle)'}</label>
-            <input 
-              type="number" 
-              name="Price" 
-              className="input-field" 
-              value={formData.Price} 
-              onChange={handleChange} 
-              disabled={formData.FreecycleTag}
+            <label style={styles.label}>Price (₹)</label>
+            <input
+              type="number"
+              name="Price"
+              className="input-field"
+              value={formData.Price}
+              onChange={handleChange}
               required={!formData.FreecycleTag}
+              disabled={formData.FreecycleTag}
             />
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input type="checkbox" name="FreecycleTag" checked={formData.FreecycleTag} onChange={handleChange} />
-              <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Mark as Free (Freecycle)</span>
-            </label>
-            
-            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}>
-              <input type="checkbox" name="LeavingCampusSoonTag" checked={formData.LeavingCampusSoonTag} onChange={handleChange} />
-              <span style={{ fontSize: '0.9rem', fontWeight: '500' }}>Leaving Campus Soon (Graduating Sale)</span>
-            </label>
-          </div>
+          <label>
+            <input
+              type="checkbox"
+              name="FreecycleTag"
+              checked={formData.FreecycleTag}
+              onChange={handleChange}
+            />
+            Mark as Free
+          </label>
+
+          <label>
+            <input
+              type="checkbox"
+              name="LeavingCampusSoonTag"
+              checked={formData.LeavingCampusSoonTag}
+              onChange={handleChange}
+            />
+            Leaving Campus Soon
+          </label>
 
           <div>
             <label style={styles.label}>Pickup Location</label>
-            <select name="PickupLocation" className="input-field" value={formData.PickupLocation} onChange={handleChange} required>
+            <select
+              name="PickupLocation"
+              className="input-field"
+              value={formData.PickupLocation}
+              onChange={handleChange}
+              required
+            >
               <option value="">Select Location</option>
-              {BASIC_LOCATIONS.map(loc => <option key={loc} value={loc}>{loc}</option>)}
+              {BASIC_LOCATIONS.map(loc => (
+                <option key={loc} value={loc}>{loc}</option>
+              ))}
             </select>
           </div>
 
           {formData.PickupLocation === 'Department Blocks' && (
-            <div style={{ padding: '10px', backgroundColor: 'rgba(0,0,0,0.02)', borderRadius: 'var(--radius-md)' }}>
-              <label style={styles.label}>Select Department Block</label>
-              <select name="DepartmentPickup" className="input-field" value={formData.DepartmentPickup} onChange={handleChange} required>
+            <div>
+              <label style={styles.label}>Department Block</label>
+              <select
+                name="DepartmentPickup"
+                className="input-field"
+                value={formData.DepartmentPickup}
+                onChange={handleChange}
+                required
+              >
                 <option value="">Select Department</option>
-                {DEPARTMENTS.map(dept => <option key={dept} value={dept}>{dept}</option>)}
+                {DEPARTMENTS.map(dept => (
+                  <option key={dept} value={dept}>{dept}</option>
+                ))}
               </select>
             </div>
           )}
 
           <div>
             <label style={styles.label}>Description</label>
-            <textarea name="Description" className="input-field" rows="3" value={formData.Description} onChange={handleChange} required />
+            <textarea
+              name="Description"
+              className="input-field"
+              rows="4"
+              value={formData.Description}
+              onChange={handleChange}
+              required
+            />
           </div>
 
           <div>
             <label style={styles.label}>Item Image</label>
-            <div style={{
-              border: '2px dashed var(--border-color)',
-              borderRadius: 'var(--radius-md)',
-              padding: '20px',
-              textAlign: 'center',
-              backgroundColor: 'var(--surface-color)',
-              position: 'relative'
-            }}>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleImageChange}
-                style={{ 
-                  position: 'absolute', 
-                  top: 0, left: 0, width: '100%', height: '100%', 
-                  opacity: 0, cursor: 'pointer' 
-                }}
+            <input type="file" accept="image/*" onChange={handleImageChange} />
+            {imagePreview && (
+              <img
+                src={imagePreview}
+                alt="Preview"
+                style={{ width: '120px', marginTop: '10px', borderRadius: '8px' }}
               />
-              {imagePreview ? (
-                <div style={{ position: 'relative', width: '100px', height: '100px', margin: '0 auto' }}>
-                  <img src={imagePreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '8px' }} />
-                </div>
-              ) : (
-                <>
-                  <ImageIcon size={32} color="var(--text-muted)" style={{ marginBottom: '10px' }} />
-                  <p style={{ margin: 0, color: 'var(--text-main)', fontSize: '0.9rem' }}>Click or drag image to upload</p>
-                </>
-              )}
-            </div>
+            )}
           </div>
 
-          <button type="submit" className="btn-primary" disabled={isSubmitting} style={{ marginTop: '10px' }}>
-            {isSubmitting ? 'Posting...' : 'Post Listing'}
+          <button type="submit" className="btn-primary" disabled={isSubmitting}>
+            {isSubmitting ? "Posting..." : "Post Listing"}
           </button>
         </form>
       </div>
@@ -283,18 +342,15 @@ const PostItem = () => {
 
 const styles = {
   label: {
-    display: 'block',
-    marginBottom: '6px',
-    fontSize: '0.9rem',
     fontWeight: '600',
-    color: 'var(--text-main)'
+    marginBottom: '5px',
+    display: 'block'
   },
   aiBox: {
-    backgroundColor: 'var(--surface-color)',
-    border: '1px solid var(--primary-light)',
-    borderRadius: 'var(--radius-md)',
     padding: '12px',
-    boxShadow: '0 2px 4px rgba(47, 138, 74, 0.1)',
+    border: '1px solid #ddd',
+    borderRadius: '8px',
+    background: '#f9f9f9'
   }
 };
 

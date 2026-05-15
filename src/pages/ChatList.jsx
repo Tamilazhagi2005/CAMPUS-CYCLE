@@ -31,7 +31,9 @@ const ChatList = () => {
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {myChats.map(chat => {
             const isBuyer = chat.BuyerEmail === currentUser.Email;
-            const otherPersonName = isBuyer ? chat.SellerName : 'Interested Buyer';
+            const otherPersonName = isBuyer
+                ? chat.SellerName
+                : chat.BuyerName || chat.BuyerEmail; 
             const lastMessage = chat.Messages.length > 0 
                 ? chat.Messages[chat.Messages.length - 1].Text 
                 : 'No messages yet...';
