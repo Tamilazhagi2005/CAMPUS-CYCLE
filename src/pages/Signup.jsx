@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
-import { auth, db, isFirebaseConfigured } from '../firebase';
-import { createUserWithEmailAndPassword } from 'firebase/auth';
+import { auth, db, isFirebaseConfigured, isAuthorizedHost, actionCodeSettings } from '../firebase';
+import { createUserWithEmailAndPassword, sendEmailVerification } from 'firebase/auth';
 import { doc, setDoc } from 'firebase/firestore';
+import Toast from '../components/Toast';
+import { getAuthErrorMessage, normalizeEmail } from '../utils/authHelpers';
 
 const DEPARTMENTS = [
   'Artificial Intelligence and Data Science (ADS)',
@@ -14,7 +16,7 @@ const DEPARTMENTS = [
   'Mechanical Engineering (MECH)',
   'Civil Engineering (CIVIL)',
   'Fashion Technology (FT)',
-  'Textile Technology (TT)'
+  'Textile Technology (TT)',
 ];
 
 const GIRLS_HOSTEL_BLOCKS = [
@@ -22,12 +24,12 @@ const GIRLS_HOSTEL_BLOCKS = [
   'Seeta B Block',
   'Seeta C Block',
   'Vishalakshi Block',
-  'Meenakshi Block'
+  'Meenakshi Block',
 ];
 
 const Signup = () => {
   const navigate = useNavigate();
-  const { setUsers } = useAppContext();
+  const { setCurrentUser } = useAppContext();
 
   const [formData, setFormData] = useState({
     name: '',
@@ -39,12 +41,13 @@ const Signup = () => {
     hostelType: '',
     hostelBlock: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
   });
 
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [toast, setToast] = useState({ type: '', message: '' });
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -70,23 +73,42 @@ const Signup = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setFormError('');
+    setToast({ type: '', message: '' });
     const validationErrors = validate();
     setErrors(validationErrors);
 
     if (Object.keys(validationErrors).length > 0) return;
 
+    if (!isFirebaseConfigured) {
+      setFormError('Firebase is not configured. Check your environment variables.');
+      return;
+    }
+
+    if (!isAuthorizedHost) {
+      setFormError('This host is not authorized for Firebase authentication. Confirm your deployed domain or localhost setup.');
+      return;
+    }
+
+    const email = normalizeEmail(formData.email);
+
+    // enforce strict college domain
+    if (!email.endsWith('@sonatech.ac.in')) {
+      setErrors({ email: 'Please use your official @sonatech.ac.in email address.' });
+      return;
+    }
+
     setLoading(true);
 
     try {
-      let userUid = `${Date.now()}`;
+      const userCredential = await createUserWithEmailAndPassword(auth, email, formData.password);
+      const user = userCredential.user;
+      const userUid = user.uid;
 
-      if (isFirebaseConfigured) {
-        const userCredential = await createUserWithEmailAndPassword(
-          auth,
-          formData.email,
-          formData.password
-        );
-        userUid = userCredential.user.uid;
+      try {
+        await sendEmailVerification(user, actionCodeSettings);
+      } catch (verificationError) {
+        console.error('Verification send failed:', verificationError);
+        throw verificationError;
       }
 
       const newUser = {
@@ -98,35 +120,30 @@ const Signup = () => {
         HostellerOrDayScholar: formData.commuteType,
         HostelType: formData.hostelType || '',
         HostelBlock: formData.hostelBlock || '',
-        Email: formData.email,
-        Password: formData.password,
+        Email: email,
         SellerRating: 5.0,
-        VerifiedBadge: true,
-        CreatedAt: new Date().toISOString()
+        VerifiedCollegeEmail: false,
+        ItemsReused: 0,
+        PointsEarned: 0,
+        ItemsSold: 0,
+        CreatedAt: new Date().toISOString(),
       };
 
-      if (isFirebaseConfigured) {
-        await setDoc(doc(db, 'Users', userUid), newUser);
-      }
-
-      setUsers((prev) => {
-        const updated = [...prev, newUser];
-        localStorage.setItem('campuscycle_users', JSON.stringify(updated));
-        return updated;
-      });
-
-      navigate('/login');
+      await setDoc(doc(db, 'Users', userUid), newUser);
+      setCurrentUser({ ...newUser, VerifiedCollegeEmail: false });
+      setToast({ type: 'success', message: 'Verification email sent. Please check your inbox and spam folder.' });
+      navigate('/verify-email');
     } catch (error) {
       console.error('Signup error:', error);
-
+      const message = getAuthErrorMessage(error);
       if (error.code === 'auth/email-already-in-use') {
-        setErrors({ email: 'This email is already registered.' });
+        setErrors({ email: message });
       } else if (error.code === 'auth/invalid-email') {
-        setErrors({ email: 'Invalid email address.' });
+        setErrors({ email: message });
       } else if (error.code === 'auth/weak-password') {
-        setErrors({ password: 'Password must be at least 6 characters.' });
+        setErrors({ password: message });
       } else {
-        setFormError(error.message || 'Failed to create account. Please try again later.');
+        setFormError(message);
       }
     } finally {
       setLoading(false);
@@ -135,7 +152,7 @@ const Signup = () => {
 
   return (
     <div className="page-container flex-row-center" style={{ minHeight: '100vh', paddingBottom: '20px' }}>
-      <div className="glass-card" style={{ padding: '30px', width: '100%', maxWidth: '500px' }}>
+      <div className="glass-card" style={{ padding: '30px', width: '100%', maxWidth: '520px' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '20px' }}>Create an account</h2>
 
         <form onSubmit={handleSubmit} style={{ display: 'grid', gap: '14px' }}>
@@ -230,6 +247,12 @@ const Signup = () => {
           Already have an account? <Link to="/login" style={{ fontWeight: '600' }}>Login</Link>
         </div>
       </div>
+
+      <Toast
+        type={toast.type}
+        message={toast.message}
+        onClose={() => setToast({ type: '', message: '' })}
+      />
     </div>
   );
 };
@@ -240,8 +263,8 @@ const styles = {
     marginBottom: '6px',
     fontSize: '0.9rem',
     fontWeight: '600',
-    color: 'var(--text-main)'
-  }
+    color: 'var(--text-main)',
+  },
 };
 
 export default Signup;

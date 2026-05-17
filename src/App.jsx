@@ -12,10 +12,14 @@ import Signup from './pages/Signup';
 import Home from './pages/Home';
 import PostItem from './pages/PostItem';
 import UserListings from './pages/UserListings';
+import MyListings from './pages/MyListings';
+import Settings from './pages/Settings';
 import ChatList from './pages/ChatList';
 import Profile from './pages/Profile';
 import ItemDetails from './pages/ItemDetails';
 import ChatWindow from './pages/ChatWindow';
+import VerifyEmail from './pages/VerifyEmail';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
@@ -25,16 +29,21 @@ function App() {
           <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/signup" element={<Signup />} />
-            
-            {/* Protected routes wrapped later, or direct access for now */}
-            <Route path="/home" element={<Home />} />
-            <Route path="/post-item" element={<PostItem />} />
-            <Route path="/my-listings" element={<UserListings />} />
-            <Route path="/chats" element={<ChatList />} />
-            <Route path="/chat/:chatId" element={<ChatWindow />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/item/:itemId" element={<ItemDetails />} />
-            
+            <Route path="/verify-email" element={<VerifyEmail />} />
+
+            {/* Protected routes */}
+            <Route path="/home" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/" element={<ProtectedRoute><Home /></ProtectedRoute>} />
+            <Route path="/post-item" element={<ProtectedRoute><PostItem /></ProtectedRoute>} />
+            <Route path="/post" element={<ProtectedRoute><PostItem /></ProtectedRoute>} />
+            <Route path="/my-listings" element={<ProtectedRoute><MyListings /></ProtectedRoute>} />
+            <Route path="/listings" element={<ProtectedRoute><UserListings /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+            <Route path="/chats" element={<ProtectedRoute><ChatList /></ProtectedRoute>} />
+            <Route path="/chat/:chatId" element={<ProtectedRoute><ChatWindow /></ProtectedRoute>} />
+            <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+            <Route path="/item/:itemId" element={<ProtectedRoute><ItemDetails /></ProtectedRoute>} />
+
             <Route path="*" element={<Navigate to="/home" replace />} />
           </Routes>
           <BottomNav />

@@ -1,6 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppContext } from '../context/AppContext';
+import { auth } from '../firebase';
+import { signOut } from 'firebase/auth';
 import { BadgeCheck, LogOut, Settings, List, MessageSquare } from 'lucide-react';
 
 const Profile = () => {
@@ -19,7 +21,12 @@ const Profile = () => {
   const userItems = items.filter(i => i.SellerEmail === currentUser.Email);
   const myChats = chats.filter(c => c.BuyerEmail === currentUser.Email || c.SellerEmail === currentUser.Email);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await signOut(auth);
+    } catch (err) {
+      console.warn('Logout failed:', err);
+    }
     setCurrentUser(null);
     navigate('/login');
   };
@@ -78,7 +85,7 @@ const Profile = () => {
           <li style={styles.menuItem} onClick={() => navigate('/chats')}>
             <MessageSquare size={20} color="var(--primary-dark)" /> My Chats
           </li>
-          <li style={styles.menuItem}>
+          <li style={styles.menuItem} onClick={() => navigate('/settings')}>
             <Settings size={20} color="var(--text-muted)" /> Account Settings
           </li>
           <li style={{...styles.menuItem, borderBottom: 'none', color: 'var(--error)'}} onClick={handleLogout}>
